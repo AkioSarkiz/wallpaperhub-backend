@@ -1,0 +1,114 @@
+---
+services:
+  app:
+    # image: wallpaper-app-backend:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/php-fpm/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - app-network
+
+  app-queue:
+    # image: wallpaper-app-backend:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/php-fpm/Dockerfile
+    command: ["/usr/local/bin/php", "/var/www/html/artisan", "queue:work", "--tries=3"]
+    deploy:
+      mode: replicated
+      replicas: 4
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+      db:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - app-network
+
+  webserver:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www/html
+      # Use a single file mount instead of a directory
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - app-network
+    depends_on:
+      - app
+  db:
+    container_name: postgres
+    image: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-db}
+      PGDATA: /data/postgres
+    networks:
+      - app-network
+    volumes:
+      - db:/data/postgres
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-db}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.16
+    networks:
+      - app-network
+    volumes:
+      - meili_data:/data.ms
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-secret}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dragonfly:
+    image: 'docker.dragonflydb.io/dragonflydb/dragonfly'
+    ulimits:
+      memlock: -1
+    networks:
+      - app-network
+    # For better performance, consider `host` mode instead `port` to avoid docker NAT.
+    # `host` mode is NOT currently supported in Swarm Mode.
+    # https://docs.docker.com/compose/compose-file/compose-file-v3/#network_mode
+    # network_mode: "host"
+    volumes:
+      - dragonflydata:/data
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  db:
+  meili_data:
+  dragonflydata:
