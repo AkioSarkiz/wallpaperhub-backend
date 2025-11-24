@@ -37,10 +37,10 @@ class WallpaperService
 
     public function getSearchPagination(): Paginator
     {
-        return Wallpaper::search(request()->query("q"))
+        return Wallpaper::search(request()->query('q'))
             ->take(10)
             ->query(function ($query) {
-                return $query->with("media")->select(["id"]);
+                return $query->with('media')->select(['id']);
             })
             ->simplePaginate();
     }
@@ -48,6 +48,11 @@ class WallpaperService
     public function increaseViewCount(int $wallpaperId): void
     {
         Wallpaper::where('id', $wallpaperId)->increment('total_views');
+    }
+
+    public function increaseDownloadsCount(int $wallpaperId): void
+    {
+        Wallpaper::where('id', $wallpaperId)->increment('total_downloads');
     }
 
     public function findOrFail(int $id): Wallpaper
