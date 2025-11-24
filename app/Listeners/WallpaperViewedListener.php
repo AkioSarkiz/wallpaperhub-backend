@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace App\Listeners;
 
-use App\ClassObjects\UserContext;
+use App\ClassObjects\TrackEventContext;
 use App\Events\WallpaperViewedEvent;
-use App\Services\WallpaperService;
+use App\Services\TrackService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Support\Facades\Cache;
 
 class WallpaperViewedListener implements ShouldQueue
 {
@@ -19,14 +18,9 @@ class WallpaperViewedListener implements ShouldQueue
      * Create the event listener.
      */
     public function __construct(
-        private readonly WallpaperService $wallpaperService
+        private readonly TrackService $trackService,
     ) {
         //
-    }
-
-    private function getCacheKey(UserContext $userContext): string
-    {
-        return sprintf('wallpaper_viewed_listener_%s_%s', $userContext->getIp(), $userContext->getUserAgent());
     }
 
     /**
@@ -34,15 +28,14 @@ class WallpaperViewedListener implements ShouldQueue
      */
     public function handle(WallpaperViewedEvent $event): void
     {
-        $cacheKey = $this->getCacheKey($event->getUserContext());
+        $trackEventContext = new TrackEventContext(
+            ip: $event->getUserContext()->getIp(),
+            userAgent: $event->getUserContext()->getUserAgent(),
+            tableName: 'wallpapers',
+            tableId: $event->getWallpaper()->getKey(),
+            eventName: 'view'
+        );
 
-        if (Cache::has($cacheKey)) {
-            // Throttle user views.
-            return;
-        }
-
-        Cache::put($cacheKey, true, now()->addMinutes(5));
-
-        $this->wallpaperService->increaseViewCount($event->getWallpaper()->id);
+        $this->trackService->trackEventWithContext($trackEventContext);
     }
 }
