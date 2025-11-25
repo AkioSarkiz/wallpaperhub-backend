@@ -27,8 +27,6 @@ class WallpaperSearchFilter extends QueryFilter implements SearchFilterInterface
 
     public function search(string $value): void
     {
-        dd($this->builder, Wallpaper::query());
-
         $this->builder->search($value);
     }
 }
