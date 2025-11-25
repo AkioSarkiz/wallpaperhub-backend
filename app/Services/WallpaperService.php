@@ -19,7 +19,7 @@ class WallpaperService
 
     public function update(Wallpaper $wallpaper, array $data): Wallpaper
     {
-        $wallpaper->update();
+        $wallpaper->update($data);
 
         return $wallpaper;
     }
